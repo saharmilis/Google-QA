@@ -1,0 +1,192 @@
+from fractions import Fraction
+from fractions import gcd
+import copy
+
+def transposeMatrix(m):
+    t = []
+    for r in range(len(m)):
+        tRow = []
+        for c in range(len(m[r])):
+            if c == r:
+                tRow.append(m[r][c])
+            else:
+                tRow.append(m[c][r])
+        t.append(tRow)
+    return t
+
+def getMatrixMinor(m,i,j):
+    return [row[:j] + row[j+1:] for row in (m[:i]+m[i+1:])]
+
+def getMatrixDeternminant(m):
+    #base case for 2x2 matrix
+    if len(m) == 2:
+        return m[0][0]*m[1][1]-m[0][1]*m[1][0]
+
+    determinant = 0
+    for c in range(len(m)):
+        determinant += ((-1)**c)*m[0][c]*getMatrixDeternminant(getMatrixMinor(m,0,c))
+    return determinant
+
+def getMatrixInverse(m):
+    determinant = getMatrixDeternminant(m)
+    #special case for 2x2 matrix:
+    if len(m) == 2:
+        return [[m[1][1]/determinant, -1*m[0][1]/determinant],
+                [-1*m[1][0]/determinant, m[0][0]/determinant]]
+
+    #find matrix of cofactors
+    cofactors = []
+    for r in range(len(m)):
+        cofactorRow = []
+        for c in range(len(m)):
+            minor = getMatrixMinor(m,r,c)
+            cofactorRow.append(((-1)**(r+c)) * getMatrixDeternminant(minor))
+        cofactors.append(cofactorRow)
+    cofactors = transposeMatrix(cofactors)
+    for r in range(len(cofactors)):
+        for c in range(len(cofactors)):
+            cofactors[r][c] = cofactors[r][c]/determinant
+    return cofactors
+
+def linalgI(n):
+    '''
+    Returns an identity matrix of the input size
+    :param n:
+    :return:
+    '''
+    m = []
+    for i in range(0, n):
+        m.append([])
+        for j in range(0, n):
+            if i is j:
+                m[i].append(1)
+            else:
+                m[i].append(0)
+    return m
+
+def markovR(m):
+    '''
+    Returns a submatrix of input matrix. Removes all receiving states' rows, and transient states' rows, except for the
+    columns that correspond to a receiving state
+    :param m:
+    :return:
+    '''
+    mR = copy.deepcopy(m)
+    nonrecv_states = []
+    lenm = len(mR)
+    for i in range(1, lenm +1):
+        iend = lenm - i
+        if mR[iend][iend] == 1:
+            del mR[iend]
+        else:
+            nonrecv_states.append(iend)
+    for i in range(0, len(mR)):
+        for j in nonrecv_states:
+            del mR[i][j]
+    return mR
+
+def markovQ(mQ):
+    '''
+    Returns a submatrix of input matrix. Removes the rows and columns of receiving states.
+    :param mQ:
+    :return:
+    '''
+    lenm = len(mQ[0])
+    for i in range(1, len(mQ[0])+1):
+        iend = lenm - i
+        if mQ[iend][iend] == 1:
+            for i2 in range(0, len(mQ[0])):
+                del mQ[i2][iend]
+            del mQ[iend]
+    return mQ
+
+def markov(m):
+    '''
+    Returns a matrix where each cell at row i, column j represents the probability of moving from state i
+    to state j
+    :param m:
+    :return:
+    '''
+    markov = copy.deepcopy(m)
+    for i in range(0, len(m[0])):
+        rowsum = sum(m[i])
+        if rowsum is not 0:
+            for j in range(0, len(m[0])):
+                markov[i][j] = Fraction(m[i][j] , rowsum)
+        else:
+            for j in range(0, len(m[0])):
+                if i is j:
+                    markov[i][j] = Fraction(1)
+                else:
+                    markov[i][j] = Fraction(0)
+    return markov
+
+def linalg_sub(m1, m2):
+    '''
+    Subtract matrix m2 from matrix m1
+    :param m1:
+    :param m2:
+    :return:
+    '''
+    for i in range(0, len(m1[0])):
+        for j in range(0, len(m1[0])):
+            m1[i][j] -= m2[i][j]
+    return m1
+
+def recv_amount(m):
+    '''
+    Returns the amount of receiving states(absorbing states)
+    :param m:
+    :return:
+    '''
+    count=0
+    for row in m:
+        if sum(row) is 0:
+            count+=1
+    return count
+
+def mult_mat(a,b):
+    '''
+    Multiply matrices a and b
+    :param a:
+    :param b:
+    :return:
+    '''
+    zip_b = zip(*b)
+    zip_b = list(zip_b)
+    return [[sum(ele_a*ele_b for ele_a, ele_b in zip(row_a, col_b))
+             for col_b in zip_b] for row_a in a]
+
+def answer(m):
+    if recv_amount(m)==1:
+        return [1,1]
+    mark = markov(m)
+    m_r = markovR(mark)
+    m_q = markovQ(mark)
+    m_i = linalgI(len(m_q))
+    m_n = getMatrixInverse(linalg_sub(m_i, m_q))
+
+    m_b = mult_mat(m_n, m_r)
+
+    final = []
+    firstrow = m_b[0]
+
+    denom = 1
+    for num in firstrow:
+        denom *= num.denominator
+
+    for num in firstrow:
+        final.append(int(num*denom))
+
+    final_gcd = reduce(gcd,(final))
+
+    for i in range(0, len(final)):
+        final[i] /= final_gcd
+
+    final.append(sum(final))
+
+    return final
+
+
+
+print(answer([[0, 1, 0, 0, 0, 1], [4, 0, 0, 3, 2, 1], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [2, 1, 1, 0, 0, 0]]))
