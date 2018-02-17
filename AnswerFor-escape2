@@ -1,0 +1,104 @@
+
+
+def answer(entrances, exits, path):
+    """
+    Returns the maximum flow for given input values
+    :param entrances: A list of indices where the bunnies start their journey
+    :param exits: A list of indices where the bunnies are trying to reach
+    :param path: A capacity matrix for traveling between the different rooms
+    :return: Maximum flow value
+    """
+
+    max_bunnies = 2000000
+    # connecting a single source and a single sink to the original path matrix
+    entrances = [item + 1 for item in entrances]
+    exits = [item + 1 for item in exits]
+    num_rooms = len(path)
+    path.insert(0, [0]*num_rooms)
+    path.append([0]*num_rooms)
+    for i in range(0, len(path)):
+        path[i].insert(0, 0)
+        path[i].append(0)
+        if i in entrances:
+            path[0][i] = max_bunnies                # init the source
+        if i in exits:
+            path[i][len(path) - 1] = max_bunnies    # init the sink
+
+    num_rooms = len(path)
+    source = 0
+    sink = num_rooms - 1
+    preflow_matrix = [[0] * num_rooms for x in range(num_rooms)]
+    label_list = [0] * num_rooms
+    excess_list = [0] * num_rooms
+    seen_list = [0] * num_rooms
+    room_queue = [i for i in range(num_rooms) if i != source and i != sink]
+    label_list[source] = num_rooms
+    excess_list[source] = max_bunnies * len(entrances)
+
+    def push(u, v):
+        """
+        Attempts to push flow from node u to node v
+        :param u: From node
+        :param v: To node
+        """
+        new_flow = min(excess_list[u], path[u][v] - preflow_matrix[u][v])
+        preflow_matrix[u][v] += new_flow
+        preflow_matrix[v][u] -= new_flow
+        excess_list[u] -= new_flow
+        excess_list[v] += new_flow
+
+    def relabel(u):
+        """
+        Set the label of node u to the minimal value of the neighbouring nodes' label (to whom we can
+        transfer flow) plus one
+        :param u: Node to relabel
+        """
+        min_height = num_rooms*num_rooms
+        for v in range(num_rooms):
+            if path[u][v] - preflow_matrix[u][v] > 0:
+                min_height = min(min_height, label_list[v])
+                label_list[u] = min_height + 1
+
+    def discharge(u):
+        """
+        Deal with excess flow for node u. Relabel if necessary
+        :param u: A node
+        """
+        while excess_list[u] > 0:
+            if seen_list[u] < num_rooms:
+                v = seen_list[u]
+                if path[u][v] - preflow_matrix[u][v] > 0 and label_list[u] > label_list[v]:
+                    push(u, v)
+                else:
+                    seen_list[u] += 1
+            else:
+                relabel(u)
+                seen_list[u] = 0
+
+    for v in range(0, num_rooms):
+        if path[source][v] > 0:
+            push(source, v)
+
+    p = 0
+    while p < len(room_queue):
+        u = room_queue[p]
+        old_label = label_list[u]
+        discharge(u)
+        if label_list[u] > old_label:
+            room_queue.insert(0, room_queue.pop(p))
+            p = 0
+        else:
+            p += 1
+
+    return sum(preflow_matrix[source])
+
+en = [0, 1]
+ex = [4, 5]
+p = [[0, 0, 4, 6, 0, 0],
+        [0, 0, 5, 2, 0, 0],
+        [0, 0, 0, 0, 4, 4],
+        [0, 0, 0, 0, 6, 6],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0]]
+#Output: (int) 16
+print(answer(en,ex,p))
