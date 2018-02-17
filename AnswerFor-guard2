@@ -1,0 +1,208 @@
+
+import math
+import fractions
+
+
+def answer(dimensions, your_position, guard_position, distance):
+    """
+    This function calculates all the "lines of sight" in a 2d mirror room between your_position and guard_position
+    It returns the number of "lines of sight" whose length is less than distance
+    Coordinates are displayed from the point of view of the captain
+    :param dimensions: an array of 2 integers of the width and height of the room
+    :param your_position: an array of 2 integers of your (the captain) x and y coordinates in the room
+    :param guard_position: an array of 2 integers of the guard's x and y coordinates in the room
+    :param distance: maximum distance that the beam can travel
+    :return: an integer of the number of distinct directions that the captain can fire to hit the elite guard
+    """
+
+    def calc_distance(p1, p2):
+        """
+        Calculates the distance between two coordinates p1, p2
+        :return: Distance between p1 and p2. Beware, the values may not be precise
+        """
+        return math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+
+    def closer_to_captain(p1, p2):
+        """
+        :return: Returns the point which is closer to the captain (0,0)
+        """
+        return p1 if calc_distance(thecaptain, p1) < calc_distance(thecaptain, p2) else p2
+
+    def minimize_coord(x, y):
+        """
+        :return: Minimal integer vector pointing at the given coordinates
+        """
+        g = abs(fractions.gcd(x, y))
+        coord = (x / g, y / g)
+        return coord
+
+    def add_coord(x, y, dic):
+        """
+        Attempts to add coordinate (as a tuple) to given dictionary.
+        The coordinate will only be added if no other coordinate already exists in that direction. If a coordinate in
+        that direction already exists, the closer one will be saved
+        :param dic: Dictionary holding "lines of sight" vectors as keys, reflection coordinates as values
+        """
+        min_coord = minimize_coord(x, y)
+        if dic.__contains__(min_coord):
+            if closer_to_captain(dic[min_coord], (x, y)) == (x, y):
+                # the new point is closer than the one saved
+                dic[min_coord] = (x, y)
+        else:
+            dic[min_coord] = (x, y)
+
+    # using south-west corner of the grid as axis
+    cap_dist_from_east_wall = dimensions[0] - your_position[0]
+    cap_dist_from_west_wall = your_position[0]
+    cap_dist_from_north_wall = dimensions[1] - your_position[1]
+    cap_dist_from_south_wall = your_position[1]
+    guard_dist_from_east_wall = dimensions[0] - guard_position[0]
+    guard_dist_from_west_wall = guard_position[0]
+    guard_dist_from_north_wall = dimensions[1] - guard_position[1]
+    guard_dist_from_south_wall = guard_position[1]
+
+    # for both dictionaries:
+    # key - minimal integer direction vector
+    # value - cartesian coordinate for the reflection's location
+    captains = {}
+    guards = {}
+
+    # from now on the captain is (0,0) and all other points are given relative to his position
+    thecaptain = (0,0)
+    theguard = (guard_position[0] - your_position[0], guard_position[1] - your_position[1])
+
+    # checking if the captain can reach the guard directly
+    if calc_distance(thecaptain, theguard) <= distance:
+        add_coord(theguard[0], theguard[1], guards)
+
+    def add_reflections_along_y(x, y, j1, j2, dic):
+        """
+        Adds coordinates to dictionary along the horizontal axis. y value remains the same while x is added an offset
+        (alternating between value of j1 and j2) upon each iteration of the loop
+        :param x: Cartesian coordinate x representing horizontal distance from (0,0)
+        :param y: Cartesian coordinate y representing vertical distance from (0,0)
+        :param j1: An offset value
+        :param j2: An offset value
+        :param dic: Dictionary holding "lines of sight" vectors as keys, reflection coordinates as values
+        """
+        # checking whether the position is on a wall or a corner
+        if j1 == 0:
+            j1 = j2
+        if j2 == 0:
+            j2 = j1
+        x += j1
+        current_dist = calc_distance((x, y), thecaptain)
+        alt_value = j2          # var alternates between the two offset values j1 and j2
+        while current_dist <= distance:
+            add_coord(x, y, dic)
+            x += alt_value
+            alt_value = j2 if alt_value == j1 else j1
+            current_dist = calc_distance((x, y), thecaptain)
+
+    def add_reflections(coords, east, west, north, south, dic):
+        """
+        Populates the received dictionary with the reflections of the object at coords
+        The reflections are relative to position (0, 0)
+        The amount of reflections added are limited by the "distance" variable
+        :param coords: A tuple indicating cartesian coordinates for an object
+        :param east: Distance of object from the eastern wall
+        :param west: Distance of object from the western wall
+        :param north: Distance of object from the northern wall
+        :param south: Distance of object from the southern wall
+        :param dic: Dictionary holding "lines of sight" vectors as keys, reflection coordinates as values
+        """
+        # going east from starting position
+        add_reflections_along_y(coords[0], coords[1], east * 2, west * 2, dic)
+        # going west from starting position
+        add_reflections_along_y(coords[0], coords[1], west * -2, east * -2, dic)
+
+        # checking whether the position is on a wall or a corner
+        if north == 0:
+            north = south
+        if south == 0:
+            south = north
+
+        # each iteration makes one step to the north with an alternating value
+        # upon each step, reflections are added along the horizontal axis
+        # initializing offset variables
+        j1 = north * 2
+        j2 = south * 2
+        alt_value = j1          # var alternates between the two offset values j1 and j2
+        y = coords[1] + j1
+        x = coords[0]
+        current_dist = calc_distance((x, y), thecaptain)
+        while current_dist <= distance:
+            add_coord(x, y, dic)
+            # going east from position x, y
+            add_reflections_along_y(x, y, east * 2, west * 2, dic)
+            # going west from position x, y
+            add_reflections_along_y(x, y, west * -2, east * -2, dic)
+            # alternating values
+            alt_value = j2 if alt_value == j1 else j1
+            y += alt_value
+            current_dist = calc_distance((x, y), thecaptain)
+
+        # each iteration makes one step to the south with an alternating value
+        alt_value = j2
+        y = coords[1] - j2
+        x = coords[0]
+        current_dist = calc_distance((x, y), thecaptain)
+        while current_dist <= distance:
+            add_coord(x, y, dic)
+            # going east from position x, y
+            add_reflections_along_y(x, y, east * 2, west * 2, dic)
+            # going west from position x, y
+            add_reflections_along_y(x, y, west * -2, east * -2, dic)
+            # alternating values
+            alt_value = j2 if alt_value == j1 else j1
+            y -= alt_value
+            current_dist = calc_distance((x, y), thecaptain)
+
+    add_reflections(thecaptain, cap_dist_from_east_wall, cap_dist_from_west_wall, cap_dist_from_north_wall,
+                    cap_dist_from_south_wall, captains)
+
+    add_reflections(theguard, guard_dist_from_east_wall, guard_dist_from_west_wall, guard_dist_from_north_wall,
+                    guard_dist_from_south_wall, guards)
+
+    # checking which of the guard's reflections are not blocked by the captain's reflections
+    shots = 0
+    for guard_direction in guards.keys():
+        if captains.__contains__(guard_direction):
+            # a captain reflection also exists in this direction
+            if closer_to_captain(guards[guard_direction], captains[guard_direction]) == guards[guard_direction]:
+                # got a clear shot at the guard at this angle
+                shots += 1
+        else:
+            shots += 1
+
+    return shots
+
+# Inputs:
+#     (int list) dimensions = [3, 2]
+#     (int list) captain_position = [1, 1]
+#     (int list) badguy_position = [2, 1]
+#     (int) distance = 4
+# Output:
+#     (int) 7
+
+# Inputs:
+#     (int list) dimensions = [300, 275]
+#     (int list) captain_position = [150, 150]
+#     (int list) badguy_position = [185, 100]
+#     (int) distance = 500
+# Output:
+#     (int) 9
+
+# dim = [3, 2]
+# cap = [1, 1]
+# bad = [2, 1]
+# dist = 4
+# print(answer(dim,cap,bad,dist))
+
+dim = [300, 275]
+cap = [150, 150]
+bad = [185, 100]
+dist = 500
+print(answer(dim,cap,bad,dist))
+
+
